@@ -22,7 +22,7 @@ int main() {
 	eventTraceProp->Wnode.ClientContext = 2;
 	eventTraceProp->Wnode.Flags |= WNODE_FLAG_TRACED_GUID;
 	eventTraceProp->LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
-	eventTraceProp->EnableFlags |= EVENT_TRACE_FLAG_NETWORK_TCPIP;
+	eventTraceProp->EnableFlags = EVENT_TRACE_FLAG_NETWORK_TCPIP;
 	eventTraceProp->LogFileNameOffset = 0;	// don't log onto file
 	eventTraceProp->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
 
