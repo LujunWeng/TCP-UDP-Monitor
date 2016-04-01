@@ -30,16 +30,17 @@ int main() {
 	cout << traceHandler << endl;
 	retCode = StartTrace(&traceHandler, loggerName, eventTraceProp);
 	if (ERROR_SUCCESS != retCode) {
+		if (ERROR_ALREADY_EXISTS == retCode) {
+			cout << "Trace session already start!" << endl;
+			cout << "Ready to stop it!" << endl;
+			goto CLEANUP_ON_ERROR;
+		}
 		cout << "Start trace session failed: " << retCode << endl;
 		goto CLEANUP_ON_ERROR;
 	}
 	cout << traceHandler << endl;
 
-	retCode = ControlTrace(traceHandler, loggerName, eventTraceProp, EVENT_TRACE_CONTROL_STOP);
-	if (ERROR_SUCCESS != retCode) {
-		cout << "Stop trace session failed: " << retCode << endl;
-		return -1;
-	}
+
 	return 0;
 
 CLEANUP_ON_ERROR:
