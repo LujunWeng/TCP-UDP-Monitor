@@ -447,6 +447,11 @@ VOID WINAPI eventCallback(
 	OLECHAR ClassGuid[50];
 	IWbemClassObject* pEventCategoryClass = NULL;
 	IWbemClassObject* pEventClass = NULL;
+	PBYTE pEventData = NULL;  
+	PBYTE pEndOfEventData = NULL;
+	PROPERTY_LIST* pProperties = NULL;
+	DWORD PropertyCount = 0;
+	LONG* pPropertyIndex = NULL;
 	HRESULT hr = S_OK;
 	SAFEARRAY* pNames = NULL;
 	LONG j = 0;
@@ -486,7 +491,36 @@ VOID WINAPI eventCallback(
 			}
 			cout << "Class: " << pEventClass << endl;
 
+			if (TRUE == GetPropertyList(pEventClass, &pProperties, &PropertyCount, &pPropertyIndex))
+			{
+				// Print the property name and value.
 
+				// Get a pointer to the beginning and end of the event data.
+				// These pointers are used to calculate the number of bytes of event
+				// data left to read. This is only useful if the last data 
+				// element is a string that contains the StringTermination("NotCounted") qualifier.
+
+				pEventData = (PBYTE)(pEvent->MofData);
+				pEndOfEventData = ((PBYTE)(pEvent->MofData) + pEvent->MofLength);
+
+				for (LONG i = 0; (DWORD)i < PropertyCount; i++)
+				{
+					PrintPropertyName(pProperties+pPropertyIndex[i]);
+
+					pEventData = PrintEventPropertyValue(pProperties+pPropertyIndex[i], 
+						pEventData, 
+						(USHORT)(pEndOfEventData - pEventData));
+
+					if (NULL == pEventData)
+					{
+						//Error reading the data. Handle as appropriate for your application.
+						break;
+					}
+				}
+
+				FreePropertyList(pProperties, PropertyCount, pPropertyIndex);
+			}
+/*
 			// Retrieve the property names.
 			hr = pEventClass->GetNames(NULL, WBEM_FLAG_LOCAL_ONLY, NULL, &pNames);
 			if (hr != WBEM_S_NO_ERROR) {
@@ -501,13 +535,11 @@ VOID WINAPI eventCallback(
 				cerr << "SafeArrayAcessData failed!" << endl;
 				goto cleanup;
 			}
+
 			for (LONG i = 0; (ULONG)i < propCount; ++i) {
 				wprintf(L"%s\n", pNameStrs[i]);
 			}
-			//SafeArrayDestroy(pNames);
-			//pNames = NULL;
-			//pEventClass->Release();
-			//pEventClass = NULL;
+*/
 		}
 	}
 
@@ -570,6 +602,7 @@ cleanup:
 
 	if (INVALID_PROCESSTRACE_HANDLE != thandle)
 	{
+		cerr << "Close Trace!" << endl;
 		retCode = CloseTrace(thandle);
 	}
 
