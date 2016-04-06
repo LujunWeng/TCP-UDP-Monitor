@@ -161,7 +161,7 @@ cleanup:
 }
 
 void printf_guid(GUID guid) {
-	printf("{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",
+	printf("{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}\n",
 		guid.Data1, guid.Data2, guid.Data3,
 		guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
 		guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
@@ -459,6 +459,24 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 	BOOL IsNullTerminated = FALSE;
 	USHORT StringLength = 0;
 
+	// If the property is an array, retrieve its size. The ArraySize variable
+	// is initialized to 1 to force the loops below to print the value
+	// of the property.
+
+	if (pProperty->CimType & CIM_FLAG_ARRAY)
+	{
+		hr = pProperty->pQualifiers->Get(L"MAX", 0, &varQualifier, NULL);
+		if (SUCCEEDED(hr))
+		{
+			ArraySize = varQualifier.intVal;
+			VariantClear(&varQualifier);
+		}
+		else
+		{
+			wprintf(L"Failed to retrieve the MAX qualifier. Terminating.\n");
+			return NULL;
+		}
+	}
 
 	// The CimType is the data type of the property.
 
@@ -480,53 +498,13 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 
 	case CIM_UINT32:
 	{
-		ULONG temp = 0;
+		UINT32 temp = 0;
 
-		hr = pProperty->pQualifiers->Get(L"Extension", 0, &varQualifier, NULL);
-		if (SUCCEEDED(hr))
+		for (UINT32 i = 0; i < ArraySize; i++)
 		{
-			// Some kernel events pack an IP address into a UINT32.
-			// Check for an Extension qualifier whose value is IPAddr.
-			// This is here to support legacy event classes; the IPAddr extension 
-			// should only be used on properties whose CIM type is object.
-
-			if (_wcsicmp(L"IPAddr", varQualifier.bstrVal) == 0)
-			{
-				PrintAsIPAddress = TRUE;
-			}
-
-			VariantClear(&varQualifier);
-		}
-		else
-		{
-			hr = pProperty->pQualifiers->Get(L"Format", 0, NULL, NULL);
-			if (SUCCEEDED(hr))
-			{
-				PrintAsHex = TRUE;
-			}
-		}
-
-		for (ULONG i = 0; i < ArraySize; i++)
-		{
-			CopyMemory(&temp, pEventData, sizeof(ULONG));
-
-			if (PrintAsIPAddress)
-			{
-				wprintf(L"%03d.%03d.%03d.%03d\n", (temp >> 0) & 0xff,
-					(temp >> 8) & 0xff,
-					(temp >> 16) & 0xff,
-					(temp >> 24) & 0xff);
-			}
-			else if (PrintAsHex)
-			{
-				wprintf(L"0x%x\n", temp);
-			}
-			else
-			{
-				wprintf(L"%lu\n", temp);
-			}
-
-			pEventData += sizeof(ULONG);
+			CopyMemory(&temp, pEventData, sizeof(UINT32));
+			wprintf(L"%I32u (uint32)\n", temp);
+			pEventData += sizeof(UINT32);
 		}
 
 		return pEventData;
@@ -826,11 +804,12 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 				for (ULONG i = 0; i < ArraySize; i++)
 				{
 					CopyMemory(&temp, pEventData, sizeof(ULONG));
-
-					wprintf(L"%d.%d.%d.%d\n", (temp >> 0) & 0xff,
-						(temp >> 8) & 0xff,
+					temp = ntohl(temp);
+					wprintf(L"%lu (ipv4) ", temp);
+					wprintf(L"%d.%d.%d.%d\n", (temp >> 24) & 0xff,
 						(temp >> 16) & 0xff,
-						(temp >> 24) & 0xff);
+						(temp >> 8) & 0xff,
+						(temp >> 0) & 0xff);
 
 					pEventData += sizeof(ULONG);
 				}
