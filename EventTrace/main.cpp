@@ -6,6 +6,7 @@
 #include <guiddef.h>
 #include <WbemCli.h>
 #include <comutil.h>
+#include <in6addr.h>
 
 #define INITGUID
 #include <evntrace.h>
@@ -23,8 +24,15 @@ typedef struct _propertyList
 IWbemClassObject* GetEventCategoryClass(BSTR bstrClassGuid, ULONG Version);
 IWbemClassObject* GetEventClass(IWbemClassObject* pEventTraceClass, ULONG EventType);
 PBYTE PrintEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes);
+void PrintPropertyName(PROPERTY_LIST* pProperty);
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
+USHORT g_PointerSize = 0;
+
+typedef LPTSTR (NTAPI *PIPV6ADDRTOSTRING)(
+	const IN6_ADDR *Addr,
+	LPTSTR S
+	);
 
 void FreePropertyList(PROPERTY_LIST* pProperties, DWORD Count, LONG* pIndex)
 {
@@ -954,113 +962,6 @@ PBYTE PrintEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT
 
 					return pEventData;
 				}
-				else if (_wcsicmp(L"Sid", varQualifier.bstrVal) == 0)
-				{
-					// Get the user's security identifier and print the 
-					// user's name and domain.
-
-					SID* psid;
-					DWORD cchUserSize = 0;
-					DWORD cchDomainSize = 0;
-					WCHAR* pUser = NULL;
-					WCHAR* pDomain = NULL;
-					SID_NAME_USE eNameUse;
-					DWORD status = 0;
-					ULONG temp = 0;
-					USHORT CopyLength = 0;
-					BYTE buffer[SECURITY_MAX_SID_SIZE];
-
-					VariantClear(&varQualifier);
-
-					for (ULONG i = 0; i < ArraySize; i++)
-					{
-						CopyMemory(&temp, pEventData, sizeof(ULONG));
-
-						if (temp > 0)
-						{
-							// A property with the Sid extension is actually a 
-							// TOKEN_USER structure followed by the SID. The size
-							// of the TOKEN_USER structure differs depending on 
-							// whether the events were generated on a 32-bit or 
-							// 64-bit architecture. Also the structure is aligned
-							// on an 8-byte boundary, so its size is 8 bytes on a
-							// 32-bit computer and 16 bytes on a 64-bit computer.
-							// Doubling the pointer size handles both cases.
-
-							USHORT BytesToSid = g_PointerSize * 2;
-
-							pEventData += BytesToSid;
-
-							if (RemainingBytes - BytesToSid > SECURITY_MAX_SID_SIZE)
-							{
-								CopyLength = SECURITY_MAX_SID_SIZE;
-							}
-							else
-							{
-								CopyLength = RemainingBytes - BytesToSid;
-							}
-
-							CopyMemory(&buffer, pEventData, CopyLength);
-							psid = (SID*)&buffer;
-
-							LookupAccountSid(NULL, psid, pUser, &cchUserSize, pDomain, &cchDomainSize, &eNameUse);
-
-							status = GetLastError();
-							if (ERROR_INSUFFICIENT_BUFFER == status)
-							{
-								pUser = (WCHAR*)malloc(cchUserSize * sizeof(WCHAR));
-								pDomain = (WCHAR*)malloc(cchDomainSize * sizeof(WCHAR));
-
-								if (pUser && pDomain)
-								{
-									if (LookupAccountSid(NULL, psid, pUser, &cchUserSize, pDomain, &cchDomainSize, &eNameUse))
-									{
-										wprintf(L"%s\\%s\n", pDomain, pUser);
-									}
-									else
-									{
-										wprintf(L"Second LookupAccountSid failed with, %d\n", GetLastError());
-									}
-								}
-								else
-								{
-									wprintf(L"Allocation error.\n");
-								}
-
-								if (pUser)
-								{
-									free(pUser);
-									pUser = NULL;
-								}
-
-								if (pDomain)
-								{
-									free(pDomain);
-									pDomain = NULL;
-								}
-
-								cchUserSize = 0;
-								cchDomainSize = 0;
-							}
-							else if (ERROR_NONE_MAPPED == status)
-							{
-								wprintf(L"Unable to locate account for the specified SID\n");
-							}
-							else
-							{
-								wprintf(L"First LookupAccountSid failed with, %d\n", status);
-							}
-
-							pEventData += SeLengthSid(psid);
-						}
-						else  // There is no SID
-						{
-							pEventData += sizeof(ULONG);
-						}
-					}
-
-					return pEventData;
-				}
 				else
 				{
 					wprintf(L"Extension, %s, not supported.\n", varQualifier.bstrVal);
@@ -1083,6 +984,20 @@ PBYTE PrintEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT
 
 		} // switch
 	}
+}
+
+void PrintPropertyName(PROPERTY_LIST* pProperty)
+{
+	HRESULT hr;
+	VARIANT varDisplayName;
+
+	// Retrieve the Description qualifier for the property. The description qualifier
+	// should contain a printable display name for the property. If the qualifier is
+	// not found, print the property name.
+
+	hr = pProperty->pQualifiers->Get(L"Description", 0, &varDisplayName, NULL);
+	wprintf(L"%s: ", (SUCCEEDED(hr)) ? varDisplayName.bstrVal : pProperty->Name);
+	VariantClear(&varDisplayName);
 }
 
 VOID WINAPI eventCallback(
@@ -1223,6 +1138,7 @@ int main() {
 		goto cleanup;
 	}
 
+	g_PointerSize = (USHORT)traceLogfile->LogfileHeader.PointerSize;
 	cout << "Trace opened successfully" << endl;
 
 	hr = ConnectToETWNamespace(_bstr_t(L"root\\wmi"));
