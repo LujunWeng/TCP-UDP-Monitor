@@ -911,16 +911,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 
 void PrintPropertyName(PROPERTY_LIST* pProperty)
 {
-	HRESULT hr;
-	VARIANT varDisplayName;
-
-	// Retrieve the Description qualifier for the property. The description qualifier
-	// should contain a printable display name for the property. If the qualifier is
-	// not found, print the property name.
-
-	hr = pProperty->pQualifiers->Get(L"Description", 0, &varDisplayName, NULL);
-	wprintf(L"%s: ", (SUCCEEDED(hr)) ? varDisplayName.bstrVal : pProperty->Name);
-	VariantClear(&varDisplayName);
+	wprintf(L"%s: ", pProperty->Name);
 }
 
 VOID WINAPI eventCallback(
@@ -939,11 +930,6 @@ VOID WINAPI eventCallback(
 	SAFEARRAY* pNames = NULL;
 	LONG j = 0;
 	ULONG propCount = 0;
-
-	//cout << pEvent->Header.Size << ", ";
-	//printf_guid(pEvent->Header.Guid);
-	//cout << " Ver: " << pEvent->Header.Version;
-	//cout << endl;
 
 	if (IsEqualGUID(pEvent->Header.Guid, EventTraceGuid) &&
 		pEvent->Header.Class.Type == EVENT_TRACE_TYPE_INFO)
@@ -992,7 +978,6 @@ VOID WINAPI eventCallback(
 					pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
 						pEventData,
 						(USHORT)(pEndOfEventData - pEventData));
-
 					if (NULL == pEventData)
 					{
 						//Error reading the data. Handle as appropriate for your application.
@@ -1002,26 +987,6 @@ VOID WINAPI eventCallback(
 
 				FreePropertyList(pProperties, PropertyCount, pPropertyIndex);
 			}
-			/*
-						// Retrieve the property names.
-						hr = pEventClass->GetNames(NULL, WBEM_FLAG_LOCAL_ONLY, NULL, &pNames);
-						if (hr != WBEM_S_NO_ERROR) {
-							cerr << "Getting Names failed!" << endl;
-							goto cleanup;
-						}
-
-						// Print the property names
-						propCount = pNames->rgsabound->cElements;
-						hr = SafeArrayAccessData(pNames, (void **)&pNameStrs);
-						if (FAILED(hr)) {
-							cerr << "SafeArrayAcessData failed!" << endl;
-							goto cleanup;
-						}
-
-						for (LONG i = 0; (ULONG)i < propCount; ++i) {
-							wprintf(L"%s\n", pNameStrs[i]);
-						}
-			*/
 		}
 	}
 
