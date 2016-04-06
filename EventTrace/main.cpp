@@ -27,7 +27,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 void PrintPropertyName(PROPERTY_LIST* pProperty);
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
-USHORT g_PointerSize = 0;
+
 
 typedef LPTSTR(NTAPI *PIPV6ADDRTOSTRING)(
 	const IN6_ADDR *Addr,
@@ -801,35 +801,6 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		hr = pProperty->pQualifiers->Get(L"Extension", 0, &varQualifier, NULL);
 		if (SUCCEEDED(hr))
 		{
-			if (_wcsicmp(L"SizeT", varQualifier.bstrVal) == 0)
-			{
-				VariantClear(&varQualifier);
-
-				// You do not need to know the data type of the property, you just 
-				// retrieve either 4 bytes or 8 bytes depending on the pointer's size.
-
-				for (ULONG i = 0; i < ArraySize; i++)
-				{
-					if (g_PointerSize == 4)
-					{
-						ULONG temp = 0;
-
-						CopyMemory(&temp, pEventData, sizeof(ULONG));
-						wprintf(L"0x%x\n", temp);
-					}
-					else
-					{
-						ULONGLONG temp = 0;
-
-						CopyMemory(&temp, pEventData, sizeof(ULONGLONG));
-						wprintf(L"0x%x\n", temp);
-					}
-
-					pEventData += g_PointerSize;
-				}
-
-				return pEventData;
-			}
 			if (_wcsicmp(L"Port", varQualifier.bstrVal) == 0)
 			{
 				USHORT temp = 0;
@@ -967,7 +938,6 @@ VOID WINAPI eventCallback(
 	HRESULT hr = S_OK;
 	SAFEARRAY* pNames = NULL;
 	LONG j = 0;
-	BSTR *pNameStrs;
 	ULONG propCount = 0;
 
 	//cout << pEvent->Header.Size << ", ";
@@ -1090,7 +1060,6 @@ int main() {
 		goto cleanup;
 	}
 
-	g_PointerSize = (USHORT)traceLogfile->LogfileHeader.PointerSize;
 	cout << "Trace opened successfully" << endl;
 
 	hr = ConnectToETWNamespace(_bstr_t(L"root\\wmi"));
