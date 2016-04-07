@@ -21,13 +21,42 @@ typedef struct _propertyList
 	IWbemQualifierSet* pQualifiers;
 } PROPERTY_LIST;
 
-IWbemClassObject* GetEventCategoryClass(BSTR bstrClassGuid, ULONG Version);
-IWbemClassObject* GetEventClass(IWbemClassObject* pEventTraceClass, ULONG EventType);
-PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes);
-void PrintPropertyName(PROPERTY_LIST* pProperty);
+typedef struct _classType {
+	char *guid;
+	char *name;
+	int version;
+	int id;
+} EVENT_CLASS_TYPE;
+
+typedef struct _connEventData {
+	uint32_t PID;
+	uint32_t size;
+	uint32_t daddr;
+	uint32_t saddr;
+	uint16_t dport;
+	uint16_t sport;
+	uint32_t connid;
+	int proto;
+	int type;
+} CONN_EVENT_DATA;
+
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
 
+//TcpIp and UdpIp class guid and version. 
+const EVENT_CLASS_TYPE eventClassList[] = {
+	{ "{9a280ac0-c8e0-11d1-84e2-00c04fb998a2}", "TCP", 2, 0 },
+	{ "{bf3a50c5-a9c9-4988-a005-2df0b7c80f80}", "UDP", 2, 1 }
+};
+
+HRESULT ConnectToETWNamespace(BSTR bstrNamespace);
+IWbemClassObject* GetEventCategoryClass(BSTR bstrClassGuid, ULONG Version);
+IWbemClassObject* GetEventClass(IWbemClassObject* pEventTraceClass, ULONG EventType);
+PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes);
+BOOL GetPropertyList(IWbemClassObject* pClass, PROPERTY_LIST** ppProperties, DWORD* pPropertyCount, LONG** ppPropertyIndex);
+void FreePropertyList(PROPERTY_LIST* pProperties, DWORD Count, LONG* pIndex);
+void PrintPropertyName(PROPERTY_LIST* pProperty);
+void guidToString(GUID guid, char *buffer, size_t count);
 
 typedef LPTSTR(NTAPI *PIPV6ADDRTOSTRING)(
 	const IN6_ADDR *Addr,
@@ -55,11 +84,6 @@ void FreePropertyList(PROPERTY_LIST* pProperties, DWORD Count, LONG* pIndex)
 	if (pIndex)
 		free(pIndex);
 }
-
-// This function retrieves the list of properties, data type, and qualifiers for
-// each property in the class. If you know the name of the property you want to 
-// retrieve, you can call the IWbemClassObject::Get method to retrieve the data
-// type and IWbemClassObject::GetPropertyQualifierSet to retrieve its qualifiers.
 
 BOOL GetPropertyList(IWbemClassObject* pClass, PROPERTY_LIST** ppProperties, DWORD* pPropertyCount, LONG** ppPropertyIndex)
 {
@@ -160,8 +184,8 @@ cleanup:
 	return TRUE;
 }
 
-void printf_guid(GUID guid) {
-	printf("{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}\n",
+void guidToString(GUID guid, char *buffer, size_t count) {
+	snprintf(buffer, count, "{%08lx-%04hx-%04hx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx}",
 		guid.Data1, guid.Data2, guid.Data3,
 		guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
 		guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
@@ -898,6 +922,7 @@ VOID WINAPI eventCallback(
 	)
 {
 	OLECHAR ClassGuid[50];
+	char guidStr[50];
 	IWbemClassObject* pEventCategoryClass = NULL;
 	IWbemClassObject* pEventClass = NULL;
 	PBYTE pEventData = NULL;
@@ -917,9 +942,32 @@ VOID WINAPI eventCallback(
 	}
 	else
 	{
-		printf_guid(pEvent->Header.Guid);
-		wprintf(L"EventVersion(%d)\n", pEvent->Header.Class.Version);
-		wprintf(L"EventType(%d)\n", pEvent->Header.Class.Type);
+		int classIndex = -1;
+		int alen = 0;
+		CONN_EVENT_DATA connEventData;
+
+		guidToString(pEvent->Header.Guid, guidStr, sizeof(guidStr)/sizeof(guidStr[0]) - 1);
+		alen = sizeof(eventClassList) / sizeof(eventClassList[0]);
+		for (int i = 0; i < alen; ++i) {
+			if (strcmp(guidStr, eventClassList[i].guid) == 0 
+				&& pEvent->Header.Class.Version == eventClassList[i].version) {
+				classIndex = i;
+				break;
+			}
+		}
+		
+		// We only need events related to TCP AND UDP connections. 
+		if (classIndex == -1) {
+			cerr << "Event Class Guid or Version does not match!" << endl;
+			goto cleanup;
+		}
+
+		memset(&connEventData, 0, sizeof(connEventData));
+		connEventData.proto = eventClassList[classIndex].id;
+		connEventData.type = pEvent->Header.Class.Type;
+		printf("%s\n", eventClassList[classIndex].guid);
+		wprintf(L"EventVersion(%d)\n", eventClassList[classIndex].version);
+		wprintf(L"EventType(%d)\n", connEventData.type);
 
 		StringFromGUID2(pEvent->Header.Guid, ClassGuid, sizeof(ClassGuid));
 		if (pEvent->MofLength > 0) {
@@ -928,25 +976,15 @@ VOID WINAPI eventCallback(
 				cerr << "Getting Category Class failed!" << endl;
 				goto cleanup;
 			}
-			cout << "Category Class: " << pEventCategoryClass << endl;
+
 			pEventClass = GetEventClass(pEventCategoryClass, pEvent->Header.Class.Type);
-			pEventCategoryClass->Release();
-			pEventCategoryClass = NULL;
 			if (!pEventClass) {
 				cerr << "Getting Event Class failed!" << endl;
 				goto cleanup;
 			}
-			cout << "Class: " << pEventClass << endl;
 
 			if (TRUE == GetPropertyList(pEventClass, &pProperties, &PropertyCount, &pPropertyIndex))
 			{
-				// Print the property name and value.
-
-				// Get a pointer to the beginning and end of the event data.
-				// These pointers are used to calculate the number of bytes of event
-				// data left to read. This is only useful if the last data 
-				// element is a string that contains the StringTermination("NotCounted") qualifier.
-
 				pEventData = (PBYTE)(pEvent->MofData);
 				pEndOfEventData = ((PBYTE)(pEvent->MofData) + pEvent->MofLength);
 
