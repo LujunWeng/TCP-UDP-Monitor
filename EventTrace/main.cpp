@@ -44,14 +44,14 @@ typedef struct _connEventData {
 struct OutputFormat {
 	static const wchar_t *titles[];
 	static wchar_t buffers[][50];
-	static size_t titlesCount;
-	static size_t bufferLen;
+	static const size_t titlesCount;
+	static const size_t bufferLen;
 };
 
 const wchar_t *OutputFormat::titles[] = { L"proto", L"type", L"PID", L"size", L"saddr", L"sport", L"daddr", L"dport" };
 wchar_t OutputFormat::buffers[][50] = { L"proto", L"type", L"PID", L"size", L"saddr", L"sport", L"daddr", L"dport" };
-size_t OutputFormat::titlesCount = sizeof(OutputFormat::titles) / sizeof(OutputFormat::titles[0]);
-size_t OutputFormat::bufferLen = 50;
+const size_t OutputFormat::titlesCount = sizeof(OutputFormat::titles) / sizeof(OutputFormat::titles[0]);
+const size_t OutputFormat::bufferLen = 50;
 
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
@@ -499,21 +499,6 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 	//// If the property is an array, retrieve its size. The ArraySize variable
 	//// is initialized to 1 to force the loops below to print the value
 	//// of the property.
-
-	if (pProperty->CimType & CIM_FLAG_ARRAY)
-	{
-		hr = pProperty->pQualifiers->Get(L"MAX", 0, &varQualifier, NULL);
-		if (SUCCEEDED(hr))
-		{
-			ArraySize = varQualifier.intVal;
-			VariantClear(&varQualifier);
-		}
-		else
-		{
-			wprintf(L"Failed to retrieve the MAX qualifier. Terminating.\n");
-			return NULL;
-		}
-	}
 
 	// The CimType is the data type of the property.
 
@@ -993,6 +978,8 @@ VOID WINAPI eventCallback(
 
 			if (TRUE == GetPropertyList(pEventClass, &pProperties, &PropertyCount, &pPropertyIndex))
 			{
+				wchar_t trashBuf[OutputFormat::bufferLen];
+
 				pEventData = (PBYTE)(pEvent->MofData);
 				pEndOfEventData = ((PBYTE)(pEvent->MofData) + pEvent->MofLength);
 
@@ -1001,12 +988,21 @@ VOID WINAPI eventCallback(
 					PROPERTY_LIST* prop = pProperties + pPropertyIndex[i];
 					for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
 						if (_wcsicmp(prop->Name, OutputFormat::titles[j]) == 0) {
-							GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
+							pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
 													  pEventData,
 													  (USHORT)(pEndOfEventData - pEventData),
 													  OutputFormat::bufferLen,
 													  OutputFormat::buffers[j]
 													  );
+							break;
+						}
+						if (j + 1 == OutputFormat::titlesCount) {
+							pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
+								pEventData,
+								(USHORT)(pEndOfEventData - pEventData),
+								OutputFormat::bufferLen,
+								trashBuf
+								);
 						}
 					}
 					//PrintPropertyName(pProperties + pPropertyIndex[i]);
