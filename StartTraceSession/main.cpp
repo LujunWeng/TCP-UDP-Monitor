@@ -26,27 +26,26 @@ int main() {
 	eventTraceProp->LogFileNameOffset = 0;	// don't log onto file
 	eventTraceProp->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
 
-
-	cout << traceHandler << endl;
 	retCode = StartTrace(&traceHandler, loggerName, eventTraceProp);
 	if (ERROR_SUCCESS != retCode) {
 		if (ERROR_ALREADY_EXISTS == retCode) {
-			cout << "Trace session already start!" << endl;
-			cout << "Ready to stop it!" << endl;
-			goto CLEANUP_ON_ERROR;
+			cout << "Trace session already started! Ready to stop it!" << endl;
+			goto cleanup;
 		}
-		cout << "Start trace session failed: " << retCode << endl;
-		goto CLEANUP_ON_ERROR;
+		cerr << "Start trace session failed: " << retCode << endl;
+		goto cleanup;
 	}
-	cout << traceHandler << endl;
 
+	cout << "Trace session started successfully!" << endl;
 
 	return 0;
 
-CLEANUP_ON_ERROR:
+cleanup:
 	retCode = ControlTrace(traceHandler, loggerName, eventTraceProp, EVENT_TRACE_CONTROL_STOP);
 	if (ERROR_SUCCESS != retCode) {
-		cout << "Stop trace session failed: " << retCode << endl;
+		cerr << "Stopping trace session failed: " << retCode << endl;
 		return -1;
 	}
+	cout << "Trace session stopped successfully!" << endl;
+	return 0;
 }
