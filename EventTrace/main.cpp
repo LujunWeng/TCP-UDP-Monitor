@@ -496,10 +496,6 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 	BOOL IsNullTerminated = FALSE;
 	USHORT StringLength = 0;
 
-	//// If the property is an array, retrieve its size. The ArraySize variable
-	//// is initialized to 1 to force the loops below to print the value
-	//// of the property.
-
 	// The CimType is the data type of the property.
 
 	switch (pProperty->CimType & (~CIM_FLAG_ARRAY))
@@ -937,7 +933,6 @@ VOID WINAPI eventCallback(
 	{
 		int classIndex = -1;
 		int alen = 0;
-		CONN_EVENT_DATA connEventData;
 
 		guidToString(pEvent->Header.Guid, guidStr, sizeof(guidStr)/sizeof(guidStr[0]));
 		alen = sizeof(eventClassList) / sizeof(eventClassList[0]);
@@ -954,13 +949,6 @@ VOID WINAPI eventCallback(
 			cerr << "Event Class Guid or Version does not match!" << endl;
 			goto cleanup;
 		}
-
-		memset(&connEventData, 0, sizeof(connEventData));
-		connEventData.proto = eventClassList[classIndex].id;
-		connEventData.type = pEvent->Header.Class.Type;
-		wprintf(L"%s\n", eventClassList[classIndex].guid);
-		wprintf(L"EventVersion(%d)\n", eventClassList[classIndex].version);
-		wprintf(L"EventType(%d)\n", connEventData.type);
 
 		StringFromGUID2(pEvent->Header.Guid, ClassGuid, sizeof(ClassGuid));
 		if (pEvent->MofLength > 0) {
@@ -1005,27 +993,19 @@ VOID WINAPI eventCallback(
 								);
 						}
 					}
-					//PrintPropertyName(pProperties + pPropertyIndex[i]);
-					//pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
-					//	pEventData,
-					//	(USHORT)(pEndOfEventData - pEventData));
+
 					if (NULL == pEventData)
 					{
 						//Error reading the data. Handle as appropriate for your application.
 						break;
 					}
 				}
-				for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
-					wprintf(L"%s ", OutputFormat::titles[j]);
-				}
-				wprintf(L"\n");
+
 				swprintf(OutputFormat::buffers[0], OutputFormat::bufferLen, L"%d", eventClassList[classIndex].id);
 				swprintf(OutputFormat::buffers[1], OutputFormat::bufferLen, L"%d", pEvent->Header.Class.Type);
 				for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
-					wprintf(L"%s ", OutputFormat::buffers[j]);
+					wprintf(L"%s%s", OutputFormat::buffers[j], j+1==OutputFormat::titlesCount ? L"\n" : L" ");
 				}
-				wprintf(L"\n");
-
 				FreePropertyList(pProperties, PropertyCount, pPropertyIndex);
 			}
 		}
