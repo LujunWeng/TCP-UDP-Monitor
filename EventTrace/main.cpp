@@ -521,7 +521,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (UINT32 i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(UINT32));
-			swprintf(outbuf, buflen, L"%I32u (uint32)", temp);
+			swprintf(outbuf, buflen, L"%I32u", temp);
 			pEventData += sizeof(UINT32);
 		}
 
@@ -819,11 +819,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 				{
 					CopyMemory(&temp, pEventData, sizeof(ULONG));
 					temp = ntohl(temp);
-					swprintf(outbuf, buflen, L"%lu (ipv4) %d.%d.%d.%d", temp, (temp >> 24) & 0xff,
-						(temp >> 16) & 0xff,
-						(temp >> 8) & 0xff,
-						(temp >> 0) & 0xff);
-
+					swprintf(outbuf, buflen, L"%lu", temp);
 					pEventData += sizeof(ULONG);
 				}
 
