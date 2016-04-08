@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstdio>
+#include <cwchar>
 #include <objbase.h>
 #include <guiddef.h>
 #include <WbemCli.h>
@@ -22,8 +23,8 @@ typedef struct _propertyList
 } PROPERTY_LIST;
 
 typedef struct _classType {
-	char *guid;
-	char *name;
+	wchar_t *guid;
+	wchar_t *name;
 	int version;
 	int id;
 } EVENT_CLASS_TYPE;
@@ -40,13 +41,23 @@ typedef struct _connEventData {
 	int type;
 } CONN_EVENT_DATA;
 
+struct OutputFormat {
+	static const wchar_t *titles[];
+	static wchar_t buffers[][50];
+	static int length;
+};
+
+const wchar_t *OutputFormat::titles[] = { L"PID", L"proto", L"type", L"size", L"saddr", L"sport", L"daddr", L"dport" };
+wchar_t OutputFormat::buffers[][50] = {  L"PID", L"proto", L"type", L"size", L"saddr", L"sport", L"daddr", L"dport" };
+int OutputFormat::length = sizeof(OutputFormat::titles) / sizeof(OutputFormat::titles[0]);
+
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
 
 //TcpIp and UdpIp class guid and version. 
 const EVENT_CLASS_TYPE eventClassList[] = {
-	{ "{9a280ac0-c8e0-11d1-84e2-00c04fb998a2}", "TCP", 2, 0 },
-	{ "{bf3a50c5-a9c9-4988-a005-2df0b7c80f80}", "UDP", 2, 1 }
+	{ L"{9a280ac0-c8e0-11d1-84e2-00c04fb998a2}", L"TCP", 2, 0 },
+	{ L"{bf3a50c5-a9c9-4988-a005-2df0b7c80f80}", L"UDP", 2, 1 }
 };
 
 HRESULT ConnectToETWNamespace(BSTR bstrNamespace);
@@ -56,7 +67,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 BOOL GetPropertyList(IWbemClassObject* pClass, PROPERTY_LIST** ppProperties, DWORD* pPropertyCount, LONG** ppPropertyIndex);
 void FreePropertyList(PROPERTY_LIST* pProperties, DWORD Count, LONG* pIndex);
 void PrintPropertyName(PROPERTY_LIST* pProperty);
-void guidToString(GUID guid, char *buffer, size_t count);
+void guidToString(GUID guid, wchar_t *buffer, size_t count);
 
 typedef LPTSTR(NTAPI *PIPV6ADDRTOSTRING)(
 	const IN6_ADDR *Addr,
@@ -184,8 +195,8 @@ cleanup:
 	return TRUE;
 }
 
-void guidToString(GUID guid, char *buffer, size_t count) {
-	snprintf(buffer, count, "{%08lx-%04hx-%04hx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx}",
+void guidToString(GUID guid, wchar_t *buffer, size_t count) {
+	swprintf(buffer, count, L"{%08lx-%04hx-%04hx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx}",
 		guid.Data1, guid.Data2, guid.Data3,
 		guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
 		guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
@@ -922,7 +933,7 @@ VOID WINAPI eventCallback(
 	)
 {
 	OLECHAR ClassGuid[50];
-	char guidStr[50];
+	wchar_t guidStr[50];
 	IWbemClassObject* pEventCategoryClass = NULL;
 	IWbemClassObject* pEventClass = NULL;
 	PBYTE pEventData = NULL;
@@ -949,7 +960,7 @@ VOID WINAPI eventCallback(
 		guidToString(pEvent->Header.Guid, guidStr, sizeof(guidStr)/sizeof(guidStr[0]) - 1);
 		alen = sizeof(eventClassList) / sizeof(eventClassList[0]);
 		for (int i = 0; i < alen; ++i) {
-			if (strcmp(guidStr, eventClassList[i].guid) == 0 
+			if (wcscmp(guidStr, eventClassList[i].guid) == 0 
 				&& pEvent->Header.Class.Version == eventClassList[i].version) {
 				classIndex = i;
 				break;
@@ -965,7 +976,7 @@ VOID WINAPI eventCallback(
 		memset(&connEventData, 0, sizeof(connEventData));
 		connEventData.proto = eventClassList[classIndex].id;
 		connEventData.type = pEvent->Header.Class.Type;
-		printf("%s\n", eventClassList[classIndex].guid);
+		wprintf(L"%s\n", eventClassList[classIndex].guid);
 		wprintf(L"EventVersion(%d)\n", eventClassList[classIndex].version);
 		wprintf(L"EventType(%d)\n", connEventData.type);
 
@@ -990,6 +1001,9 @@ VOID WINAPI eventCallback(
 
 				for (LONG i = 0; (DWORD)i < PropertyCount; i++)
 				{
+					for (int j = 0; j < OutputFormat::length; ++j) {
+
+					}
 					PrintPropertyName(pProperties + pPropertyIndex[i]);
 
 					pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
