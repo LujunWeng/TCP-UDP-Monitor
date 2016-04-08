@@ -20,11 +20,11 @@ Monitor TCP and UDP connections in Windows
  
  PID (uint32_t): process id
  
- saddr (uint32_t host byte order): source address
+ saddr : source address
  
  sport (uint32_t host byte order): source port
  
- daddr (uint16_t host byte order): destination address
+ daddr : destination address
  
  dport (uint16_t host byte order): destination port
 
