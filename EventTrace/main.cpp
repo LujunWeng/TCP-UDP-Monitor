@@ -75,6 +75,10 @@ typedef LPTSTR(NTAPI *PIPV6ADDRTOSTRING)(
 	const IN6_ADDR *Addr,
 	LPTSTR S
 	);
+typedef PTSTR (NTAPI *PIPV4ADDRTOSTRING)(
+	_In_  const IN_ADDR *Addr,
+	_Out_       PTSTR   S
+	);
 
 void FreePropertyList(PROPERTY_LIST* pProperties, DWORD Count, LONG* pIndex)
 {
@@ -811,20 +815,35 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 			else if (_wcsicmp(L"IPAddr", varQualifier.bstrVal) == 0 ||
 				_wcsicmp(L"IPAddrV4", varQualifier.bstrVal) == 0)
 			{
-				ULONG temp = 0;
+				WCHAR IPv4AddressAsString[20];
+				IN_ADDR IPv4Address;
+				PIPV4ADDRTOSTRING fnRtlIpv4AddressToString;
 
 				VariantClear(&varQualifier);
 
+				fnRtlIpv4AddressToString = (PIPV4ADDRTOSTRING)GetProcAddress(
+					GetModuleHandle(L"ntdll"), "RtlIpv4AddressToStringW");
+
+				if (NULL == fnRtlIpv4AddressToString)
+				{
+					wprintf(L"GetProcAddress failed with %lu.\n", GetLastError());
+					return NULL;
+				}
+
 				for (ULONG i = 0; i < ArraySize; i++)
 				{
-					CopyMemory(&temp, pEventData, sizeof(ULONG));
-					temp = ntohl(temp);
-					swprintf(outbuf, buflen, L"%lu", temp);
-					pEventData += sizeof(ULONG);
+					CopyMemory(&IPv4Address, pEventData, sizeof(IN_ADDR));
+
+					fnRtlIpv4AddressToString(&IPv4Address, IPv4AddressAsString);
+
+					swprintf(outbuf, buflen, L"%s", IPv4AddressAsString);
+
+					pEventData += sizeof(IN_ADDR);
 				}
 
 				return pEventData;
 			}
+
 			else if (_wcsicmp(L"IPAddrV6", varQualifier.bstrVal) == 0)
 			{
 				WCHAR IPv6AddressAsString[46];
@@ -997,7 +1016,7 @@ VOID WINAPI eventCallback(
 					}
 				}
 
-				swprintf(OutputFormat::buffers[0], OutputFormat::bufferLen, L"%d", eventClassList[classIndex].id);
+				swprintf(OutputFormat::buffers[0], OutputFormat::bufferLen, L"%s", eventClassList[classIndex].name);
 				swprintf(OutputFormat::buffers[1], OutputFormat::bufferLen, L"%d", pEvent->Header.Class.Type);
 				for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
 					wprintf(L"%s%s", OutputFormat::buffers[j], j+1==OutputFormat::titlesCount ? L"\n" : L" ");
