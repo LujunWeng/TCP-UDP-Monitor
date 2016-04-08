@@ -44,12 +44,14 @@ typedef struct _connEventData {
 struct OutputFormat {
 	static const wchar_t *titles[];
 	static wchar_t buffers[][50];
-	static int length;
+	static size_t titlesCount;
+	static size_t bufferLen;
 };
 
-const wchar_t *OutputFormat::titles[] = { L"PID", L"proto", L"type", L"size", L"saddr", L"sport", L"daddr", L"dport" };
-wchar_t OutputFormat::buffers[][50] = {  L"PID", L"proto", L"type", L"size", L"saddr", L"sport", L"daddr", L"dport" };
-int OutputFormat::length = sizeof(OutputFormat::titles) / sizeof(OutputFormat::titles[0]);
+const wchar_t *OutputFormat::titles[] = { L"proto", L"type", L"PID", L"size", L"saddr", L"sport", L"daddr", L"dport" };
+wchar_t OutputFormat::buffers[][50] = { L"proto", L"type", L"PID", L"size", L"saddr", L"sport", L"daddr", L"dport" };
+size_t OutputFormat::titlesCount = sizeof(OutputFormat::titles) / sizeof(OutputFormat::titles[0]);
+size_t OutputFormat::bufferLen = 50;
 
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
@@ -63,7 +65,7 @@ const EVENT_CLASS_TYPE eventClassList[] = {
 HRESULT ConnectToETWNamespace(BSTR bstrNamespace);
 IWbemClassObject* GetEventCategoryClass(BSTR bstrClassGuid, ULONG Version);
 IWbemClassObject* GetEventClass(IWbemClassObject* pEventTraceClass, ULONG EventType);
-PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes);
+PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes, size_t buflen, wchar_t *outbuf);
 BOOL GetPropertyList(IWbemClassObject* pClass, PROPERTY_LIST** ppProperties, DWORD* pPropertyCount, LONG** ppPropertyIndex);
 void FreePropertyList(PROPERTY_LIST* pProperties, DWORD Count, LONG* pIndex);
 void PrintPropertyName(PROPERTY_LIST* pProperty);
@@ -481,7 +483,7 @@ cleanup:
 	return pClass;
 }
 
-PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes)
+PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHORT RemainingBytes, size_t buflen, wchar_t *outbuf)
 {
 	HRESULT hr;
 	VARIANT varQualifier;
@@ -494,9 +496,9 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 	BOOL IsNullTerminated = FALSE;
 	USHORT StringLength = 0;
 
-	// If the property is an array, retrieve its size. The ArraySize variable
-	// is initialized to 1 to force the loops below to print the value
-	// of the property.
+	//// If the property is an array, retrieve its size. The ArraySize variable
+	//// is initialized to 1 to force the loops below to print the value
+	//// of the property.
 
 	if (pProperty->CimType & CIM_FLAG_ARRAY)
 	{
@@ -524,7 +526,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (ULONG i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(LONG));
-			wprintf(L"%d\n", temp);
+			swprintf(outbuf, buflen, L"%d", temp);
 			pEventData += sizeof(LONG);
 		}
 
@@ -538,7 +540,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (UINT32 i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(UINT32));
-			wprintf(L"%I32u (uint32)\n", temp);
+			swprintf(outbuf, buflen, L"%I32u (uint32)", temp);
 			pEventData += sizeof(UINT32);
 		}
 
@@ -552,7 +554,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (ULONG i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(LONGLONG));
-			wprintf(L"%I64d\n", temp);
+			swprintf(outbuf, buflen, L"%I64d", temp);
 			pEventData += sizeof(LONGLONG);
 		}
 
@@ -566,7 +568,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (ULONG i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(ULONGLONG));
-			wprintf(L"%I64u\n", temp);
+			swprintf(outbuf, buflen, L"%I64u", temp);
 			pEventData += sizeof(ULONGLONG);
 		}
 
@@ -624,7 +626,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 				if (IsNullTerminated)
 				{
 					StringLength = (USHORT)wcslen((WCHAR*)pEventData) + 1;
-					wprintf(L"%s\n", (WCHAR*)pEventData);
+					swprintf(outbuf, buflen, L"%s", (WCHAR*)pEventData);
 				}
 				else
 				{
@@ -635,7 +637,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 					{
 						CopyMemory(pwsz, (WCHAR*)pEventData, StringSize);
 						*(pwsz + StringSize) = '\0';
-						wprintf(L"%s\n", pwsz);
+						swprintf(outbuf, buflen, L"%s", pwsz);
 						free(pwsz);
 					}
 					else
@@ -685,7 +687,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (ULONG i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(BOOL));
-			wprintf(L"%s\n", (temp) ? L"TRUE" : L"FALSE");
+			swprintf(outbuf, buflen, L"%s", (temp) ? L"TRUE" : L"FALSE");
 			pEventData += sizeof(BOOL);
 		}
 
@@ -708,7 +710,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 
 				CopyMemory(&Guid, (GUID*)pEventData, sizeof(GUID));
 				StringFromGUID2(Guid, szGuid, sizeof(szGuid) - 1);
-				wprintf(L"%s\n", szGuid);
+				swprintf(outbuf, buflen, L"%s", szGuid);
 			}
 
 			VariantClear(&varQualifier);
@@ -725,15 +727,13 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 			for (ULONG i = 0; i < ArraySize; i++)
 			{
 				if (PrintAsChar)
-					wprintf(L"%c", *((char*)pEventData));
+					swprintf(outbuf, buflen, L"%c", *((char*)pEventData));
 				else
-					wprintf(L"%hd", *((BYTE*)pEventData));
+					swprintf(outbuf, buflen, L"%hd", *((BYTE*)pEventData));
 
 				pEventData += sizeof(UINT8);
 			}
 		}
-
-		wprintf(L"\n");
 
 		return pEventData;
 	}
@@ -745,11 +745,9 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (ULONG i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(WCHAR));
-			wprintf(L"%c", temp);
+			swprintf(outbuf, buflen, L"%c", temp);
 			pEventData += sizeof(WCHAR);
 		}
-
-		wprintf(L"\n");
 
 		return pEventData;
 	}
@@ -761,7 +759,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 		for (ULONG i = 0; i < ArraySize; i++)
 		{
 			CopyMemory(&temp, pEventData, sizeof(SHORT));
-			wprintf(L"%hd\n", temp);
+			swprintf(outbuf, buflen, L"%hd", temp);
 			pEventData += sizeof(SHORT);
 		}
 
@@ -794,11 +792,11 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 
 			if (PrintAsPort)
 			{
-				wprintf(L"%hu\n", ntohs(temp));
+				swprintf(outbuf, buflen, L"%hu", ntohs(temp));
 			}
 			else
 			{
-				wprintf(L"%hu\n", temp);
+				swprintf(outbuf, buflen, L"%hu", temp);
 			}
 
 			pEventData += sizeof(USHORT);
@@ -823,7 +821,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 				for (ULONG i = 0; i < ArraySize; i++)
 				{
 					CopyMemory(&temp, pEventData, sizeof(USHORT));
-					wprintf(L"%hu\n", ntohs(temp));
+					swprintf(outbuf, buflen, L"%hu", ntohs(temp));
 					pEventData += sizeof(USHORT);
 				}
 
@@ -840,8 +838,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 				{
 					CopyMemory(&temp, pEventData, sizeof(ULONG));
 					temp = ntohl(temp);
-					wprintf(L"%lu (ipv4) ", temp);
-					wprintf(L"%d.%d.%d.%d\n", (temp >> 24) & 0xff,
+					swprintf(outbuf, buflen, L"%lu (ipv4) %d.%d.%d.%d", temp, (temp >> 24) & 0xff,
 						(temp >> 16) & 0xff,
 						(temp >> 8) & 0xff,
 						(temp >> 0) & 0xff);
@@ -874,7 +871,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 
 					fnRtlIpv6AddressToString(&IPv6Address, IPv6AddressAsString);
 
-					wprintf(L"%s\n", IPv6AddressAsString);
+					swprintf(outbuf, buflen, L"%s", IPv6AddressAsString);
 
 					pEventData += sizeof(IN6_ADDR);
 				}
@@ -893,7 +890,7 @@ PBYTE GetConnEventPropertyValue(PROPERTY_LIST* pProperty, PBYTE pEventData, USHO
 					CopyMemory(&Guid, (GUID*)pEventData, sizeof(GUID));
 
 					StringFromGUID2(Guid, szGuid, sizeof(szGuid) - 1);
-					wprintf(L"%s\n", szGuid);
+					swprintf(outbuf, buflen, L"%s", szGuid);
 
 					pEventData += sizeof(GUID);
 				}
@@ -957,7 +954,7 @@ VOID WINAPI eventCallback(
 		int alen = 0;
 		CONN_EVENT_DATA connEventData;
 
-		guidToString(pEvent->Header.Guid, guidStr, sizeof(guidStr)/sizeof(guidStr[0]) - 1);
+		guidToString(pEvent->Header.Guid, guidStr, sizeof(guidStr)/sizeof(guidStr[0]));
 		alen = sizeof(eventClassList) / sizeof(eventClassList[0]);
 		for (int i = 0; i < alen; ++i) {
 			if (wcscmp(guidStr, eventClassList[i].guid) == 0 
@@ -1001,20 +998,37 @@ VOID WINAPI eventCallback(
 
 				for (LONG i = 0; (DWORD)i < PropertyCount; i++)
 				{
-					for (int j = 0; j < OutputFormat::length; ++j) {
-
+					PROPERTY_LIST* prop = pProperties + pPropertyIndex[i];
+					for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
+						if (_wcsicmp(prop->Name, OutputFormat::titles[j]) == 0) {
+							GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
+													  pEventData,
+													  (USHORT)(pEndOfEventData - pEventData),
+													  OutputFormat::bufferLen,
+													  OutputFormat::buffers[j]
+													  );
+						}
 					}
-					PrintPropertyName(pProperties + pPropertyIndex[i]);
-
-					pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
-						pEventData,
-						(USHORT)(pEndOfEventData - pEventData));
+					//PrintPropertyName(pProperties + pPropertyIndex[i]);
+					//pEventData = GetConnEventPropertyValue(pProperties + pPropertyIndex[i],
+					//	pEventData,
+					//	(USHORT)(pEndOfEventData - pEventData));
 					if (NULL == pEventData)
 					{
 						//Error reading the data. Handle as appropriate for your application.
 						break;
 					}
 				}
+				for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
+					wprintf(L"%s ", OutputFormat::titles[j]);
+				}
+				wprintf(L"\n");
+				swprintf(OutputFormat::buffers[0], OutputFormat::bufferLen, L"%d", eventClassList[classIndex].id);
+				swprintf(OutputFormat::buffers[1], OutputFormat::bufferLen, L"%d", pEvent->Header.Class.Type);
+				for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
+					wprintf(L"%s ", OutputFormat::buffers[j]);
+				}
+				wprintf(L"\n");
 
 				FreePropertyList(pProperties, PropertyCount, pPropertyIndex);
 			}
