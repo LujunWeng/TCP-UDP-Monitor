@@ -8,14 +8,15 @@
 
 using namespace std;
 
-int main() {
-	EVENT_TRACE_PROPERTIES *eventTraceProp;
+int main(int argc, char **argv) {
+	EVENT_TRACE_PROPERTIES *eventTraceProp = NULL;
 	TCHAR loggerName[] = KERNEL_LOGGER_NAME;
 	TRACEHANDLE traceHandler = 0;
 	size_t bufferSize = sizeof(EVENT_TRACE_PROPERTIES) + sizeof(loggerName);
 	ULONG retCode;
 
-	eventTraceProp = (EVENT_TRACE_PROPERTIES *) malloc(bufferSize);
+
+	eventTraceProp = (EVENT_TRACE_PROPERTIES *)malloc(bufferSize);
 	memset(eventTraceProp, 0, bufferSize);
 	eventTraceProp->Wnode.BufferSize = bufferSize;
 	eventTraceProp->Wnode.Guid = SystemTraceControlGuid;
@@ -27,25 +28,30 @@ int main() {
 	eventTraceProp->LoggerNameOffset = sizeof(EVENT_TRACE_PROPERTIES);
 
 	retCode = StartTrace(&traceHandler, loggerName, eventTraceProp);
-	if (ERROR_SUCCESS != retCode) {
-		if (ERROR_ALREADY_EXISTS == retCode) {
-			cout << "Trace session already started! Ready to stop it!" << endl;
+	if (argc <= 1) {
+		if (ERROR_SUCCESS != retCode) {
+			if (ERROR_ALREADY_EXISTS == retCode) {
+				cout << "Trace session already started!" << endl;
+				goto cleanup;
+			}
+			cerr << "Start trace session failed: " << retCode << endl;
 			goto cleanup;
 		}
-		cerr << "Start trace session failed: " << retCode << endl;
-		goto cleanup;
+		cout << "Trace session started successfully!" << endl;
+	} else {
+		if (strcmp(argv[1], "close") == 0) {
+			cout << "Ready to close trace session!" << endl;
+
+			retCode = ControlTrace(traceHandler, loggerName, eventTraceProp, EVENT_TRACE_CONTROL_STOP);
+			if (ERROR_SUCCESS != retCode) {
+				cerr << "Stopping trace session failed: " << retCode << endl;
+				goto cleanup;
+			}
+			cout << "Trace session stopped successfully!" << endl;
+		}
 	}
-
-	cout << "Trace session started successfully!" << endl;
-
-	return 0;
 
 cleanup:
-	retCode = ControlTrace(traceHandler, loggerName, eventTraceProp, EVENT_TRACE_CONTROL_STOP);
-	if (ERROR_SUCCESS != retCode) {
-		cerr << "Stopping trace session failed: " << retCode << endl;
-		return -1;
-	}
-	cout << "Trace session stopped successfully!" << endl;
+	free(eventTraceProp);
 	return 0;
 }
