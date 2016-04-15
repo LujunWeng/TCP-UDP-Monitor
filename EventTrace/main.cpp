@@ -46,12 +46,20 @@ struct OutputFormat {
 	static wchar_t buffers[][50];
 	static const size_t titlesCount;
 	static const size_t bufferLen;
+	static void jsonFormatOutput();
 };
 
 const wchar_t *OutputFormat::titles[] = { L"proto", L"type", L"PID", L"size", L"saddr", L"sport", L"daddr", L"dport" };
 wchar_t OutputFormat::buffers[][50] = { L"proto", L"type", L"PID", L"size", L"saddr", L"sport", L"daddr", L"dport" };
 const size_t OutputFormat::titlesCount = sizeof(OutputFormat::titles) / sizeof(OutputFormat::titles[0]);
 const size_t OutputFormat::bufferLen = 50;
+void OutputFormat::jsonFormatOutput() {
+	wprintf(L"{ ");
+	for (size_t i = 0; i < titlesCount; ++i) {
+		wprintf(L"\"%s\":\"%s\"%s", titles[i], buffers[i], i+1==titlesCount ? L"" : L", ");
+	}
+	wprintf(L" }\n");
+}
 
 // Points to WMI namespace that contains the ETW MOF classes.
 IWbemServices* g_pServices = NULL;
@@ -1018,9 +1026,7 @@ VOID WINAPI eventCallback(
 
 				swprintf(OutputFormat::buffers[0], OutputFormat::bufferLen, L"%s", eventClassList[classIndex].name);
 				swprintf(OutputFormat::buffers[1], OutputFormat::bufferLen, L"%d", pEvent->Header.Class.Type);
-				for (size_t j = 0; j < OutputFormat::titlesCount; ++j) {
-					wprintf(L"%s%s", OutputFormat::buffers[j], j+1==OutputFormat::titlesCount ? L"\n" : L" ");
-				}
+				OutputFormat::jsonFormatOutput();
 				FreePropertyList(pProperties, PropertyCount, pPropertyIndex);
 			}
 		}
