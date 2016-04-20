@@ -40,8 +40,6 @@ int main(int argc, char **argv) {
 		cout << "Trace session started successfully!" << endl;
 	} else {
 		if (strcmp(argv[1], "close") == 0) {
-			cout << "Ready to close trace session!" << endl;
-
 			retCode = ControlTrace(traceHandler, loggerName, eventTraceProp, EVENT_TRACE_CONTROL_STOP);
 			if (ERROR_SUCCESS != retCode) {
 				cerr << "Stopping trace session failed: " << retCode << endl;

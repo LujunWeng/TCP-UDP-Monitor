@@ -1067,8 +1067,6 @@ int main() {
 		goto cleanup;
 	}
 
-	cout << "Trace opened successfully" << endl;
-
 	hr = ConnectToETWNamespace(_bstr_t(L"root\\wmi"));
 	if (FAILED(hr))
 	{
@@ -1083,15 +1081,12 @@ int main() {
 		goto cleanup;
 	}
 
-	cout << "Trace closed successfully" << endl;
-
 	return 0;
 
 cleanup:
 
 	if (INVALID_PROCESSTRACE_HANDLE != thandle)
 	{
-		cerr << "Close Trace!" << endl;
 		retCode = CloseTrace(thandle);
 	}
 
