@@ -59,6 +59,7 @@ void OutputFormat::jsonFormatOutput() {
 		wprintf(L"\"%s\":\"%s\"%s", titles[i], buffers[i], i+1==titlesCount ? L"" : L", ");
 	}
 	wprintf(L" }\n");
+	fflush(stdout);
 }
 
 // Points to WMI namespace that contains the ETW MOF classes.
